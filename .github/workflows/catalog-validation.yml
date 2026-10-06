@@ -1,0 +1,28 @@
+name: Catalog validation
+
+on:
+  pull_request:
+    paths:
+      - 'app/src/main/java/com/machinahnos/vehiculos/**'
+      - 'app/src/main/assets/**'
+      - '.github/workflows/catalog-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'app/src/main/java/com/machinahnos/vehiculos/**'
+      - 'app/src/main/assets/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compile catalog and recommendation domain
+        run: ./gradlew :app:compileDebugKotlin

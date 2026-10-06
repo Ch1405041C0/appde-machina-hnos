@@ -17,10 +17,10 @@ data class RecommendationSession(
 
 object RecommendationSessionFactory {
     fun fromStock(rawStock: List<Vehicle>): RecommendationSession {
-        val classifiedStock = VehicleClassifier.classifyStock(rawStock)
+        val preparedStock = CatalogValidator.prepare(rawStock)
         return RecommendationSession(
-            stock = classifiedStock,
-            questions = DynamicQuestionEngine.questions(classifiedStock),
+            stock = preparedStock,
+            questions = DynamicQuestionEngine.questions(preparedStock),
         )
     }
 }
