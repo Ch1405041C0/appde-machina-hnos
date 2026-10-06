@@ -1,11 +1,7 @@
 package com.machinahnos.vehiculos
 
 /**
- * Biblioteca de identidad de modelos.
- * Separa la personalidad con la que fue concebido un modelo de los datos
- * particulares de una unidad usada (año, km, precio, etc.).
- *
- * La biblioteca puede crecer sin tocar el motor de recomendación.
+ * Identidad comercial de un modelo, separada de los datos de cada unidad usada.
  */
 data class ModelIdentity(
     val brand: String,
@@ -15,8 +11,15 @@ data class ModelIdentity(
     val strengths: Set<Priority> = emptySet()
 )
 
+/**
+ * Catálogo reemplazable de identidades.
+ *
+ * El motor de clasificación no conoce de dónde llegan los datos. Hoy existe un
+ * catálogo inicial; mañana puede cargarse desde assets, una API o el panel de
+ * stock sin reescribir RecommendationEngine ni VehicleClassifier.
+ */
 object VehicleModelLibrary {
-    private val identities = listOf(
+    private val defaultIdentities = listOf(
         ModelIdentity("Peugeot", listOf("208"), setOf(VehicleDNA.URBANO, VehicleDNA.JOVEN, VehicleDNA.TECNOLOGICO), setOf(UseCase.CIUDAD, UseCase.MIXTO), setOf(Priority.ECONOMIA, Priority.TECNOLOGIA, Priority.PRESENCIA)),
         ModelIdentity("Toyota", listOf("Corolla"), setOf(VehicleDNA.RACIONAL, VehicleDNA.FAMILIAR, VehicleDNA.ELEGANTE), setOf(UseCase.CIUDAD, UseCase.FAMILIA, UseCase.RUTA), setOf(Priority.CONFIABILIDAD, Priority.CONFORT, Priority.SEGURIDAD)),
         ModelIdentity("Volkswagen", listOf("Amarok"), setOf(VehicleDNA.ROBUSTO, VehicleDNA.TRABAJADOR, VehicleDNA.PREMIUM), setOf(UseCase.TRABAJO, UseCase.CARGA, UseCase.CAMPO, UseCase.RUTA), setOf(Priority.PRESTACIONES, Priority.ESPACIO, Priority.PRESENCIA)),
@@ -24,6 +27,25 @@ object VehicleModelLibrary {
         ModelIdentity("Chevrolet", listOf("Cruze"), setOf(VehicleDNA.TECNOLOGICO, VehicleDNA.ELEGANTE, VehicleDNA.DEPORTIVO), setOf(UseCase.CIUDAD, UseCase.FAMILIA, UseCase.RUTA), setOf(Priority.TECNOLOGIA, Priority.CONFORT, Priority.PRESTACIONES)),
         ModelIdentity("Ford", listOf("Territory"), setOf(VehicleDNA.FAMILIAR, VehicleDNA.TECNOLOGICO, VehicleDNA.PREMIUM), setOf(UseCase.FAMILIA, UseCase.CIUDAD, UseCase.RUTA), setOf(Priority.TECNOLOGIA, Priority.CONFORT, Priority.ESPACIO))
     )
+
+    @Volatile
+    private var identities: List<ModelIdentity> = defaultIdentities
+
+    /** Reemplaza el catálogo activo con datos validados por la capa que los cargue. */
+    fun configure(catalog: List<ModelIdentity>) {
+        require(catalog.isNotEmpty()) { "model identity catalog cannot be empty" }
+        require(catalog.all { it.brand.isNotBlank() && it.modelTokens.any(String::isNotBlank) }) {
+            "every model identity needs a brand and at least one model token"
+        }
+        identities = catalog.toList()
+    }
+
+    /** Vuelve al catálogo incluido en la app; útil para modo offline y pruebas. */
+    fun resetToDefaults() {
+        identities = defaultIdentities
+    }
+
+    fun snapshot(): List<ModelIdentity> = identities.toList()
 
     fun find(brand: String, model: String): ModelIdentity? {
         val normalizedBrand = normalize(brand)
@@ -41,10 +63,6 @@ object VehicleModelLibrary {
 }
 
 object VehicleClassifier {
-    /**
-     * Enriquece una unidad cargada en stock con el ADN conocido de su modelo.
-     * Nunca pisa información específica ya cargada: la complementa.
-     */
     fun classify(vehicle: Vehicle): Vehicle {
         val identity = VehicleModelLibrary.find(vehicle.brand, vehicle.model) ?: return inferFromVehicle(vehicle)
         return vehicle.copy(
@@ -56,7 +74,6 @@ object VehicleClassifier {
 
     fun classifyStock(stock: List<Vehicle>): List<Vehicle> = stock.map(::classify)
 
-    /** Fallback cuando todavía no conocemos el modelo en la biblioteca. */
     private fun inferFromVehicle(vehicle: Vehicle): Vehicle {
         val inferredDna = buildSet {
             when (vehicle.body) {
